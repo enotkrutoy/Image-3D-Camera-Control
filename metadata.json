@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Qwen-Image-3D-Camera-Control",
+  "description": "A professional-grade React application for 3D camera angle editing and identity-preserving image modification using Gemini 2.5 Flash Image.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
