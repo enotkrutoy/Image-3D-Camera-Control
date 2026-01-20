@@ -1,5 +1,5 @@
-
 import React, { useEffect, useRef } from 'react';
+import * as THREE from 'three';
 import { CameraParams, CameraAction } from '../types';
 import { 
   AZIMUTH_STEPS, 
@@ -10,8 +10,6 @@ import {
   DISTANCE_MAP 
 } from '../constants';
 
-declare const THREE: any;
-
 interface Camera3DProps {
   value: CameraParams;
   imageUrl: string | null;
@@ -20,13 +18,12 @@ interface Camera3DProps {
 
 const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<any>(null);
-  const sceneRef = useRef<any>(null);
-  const cameraRef = useRef<any>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const stateRef = useRef<CameraParams>(value);
   const promptOverlayRef = useRef<HTMLDivElement>(null);
 
-  // Sync internal state ref when prop changes (from external sliders)
   useEffect(() => {
     stateRef.current = value;
   }, [value]);
@@ -34,12 +31,11 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // --- Setup ---
     const width = containerRef.current.clientWidth;
     const height = 450;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111827); // tailwind gray-900
+    scene.background = new THREE.Color(0x111827);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
@@ -53,27 +49,22 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
     dirLight.position.set(5, 10, 5);
     scene.add(dirLight);
 
-    // Grid
     scene.add(new THREE.GridHelper(8, 16, 0x374151, 0x1f2937));
 
-    // Constants
     const CENTER = new THREE.Vector3(0, 0.75, 0);
     const BASE_DISTANCE = 1.6;
     const AZIMUTH_RADIUS = 2.4;
     const ELEVATION_RADIUS = 1.8;
 
-    // Helpers
     const snapToNearest = (val: number, steps: number[]) => {
       return steps.reduce((prev, curr) => Math.abs(curr - val) < Math.abs(prev - val) ? curr : prev);
     };
 
-    // --- Objects ---
     const createPlaceholderTexture = () => {
       const canvas = document.createElement('canvas');
       canvas.width = 256; canvas.height = 256;
@@ -93,7 +84,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     targetPlane.position.copy(CENTER);
     scene.add(targetPlane);
 
-    // Camera Avatar
     const cameraGroup = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, metalness: 0.5, roughness: 0.3 });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.38), bodyMat);
@@ -107,7 +97,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     cameraGroup.add(lens);
     scene.add(cameraGroup);
 
-    // Rings & Handles
     const createHandle = (color: number, type: CameraAction) => {
       const h = new THREE.Mesh(
         new THREE.SphereGeometry(0.18, 16, 16),
@@ -134,7 +123,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     const distanceLine = new THREE.Line(distanceLineGeo, new THREE.LineBasicMaterial({ color: 0xf59e0b }));
     scene.add(distanceLine);
 
-    // --- State & Updates ---
     const updatePositions = () => {
       const { azimuth, elevation, distance } = stateRef.current;
       const d = BASE_DISTANCE * distance;
@@ -167,7 +155,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
       }
     };
 
-    // Interaction
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     let isDragging = false;
@@ -175,7 +162,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     let dragStartMouse = new THREE.Vector2();
     let dragStartDistance = 1.0;
 
-    // Use proper EventListener signatures to satisfy TS overloads and fix line 260 error
     const onMouseDown = (e: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -220,7 +206,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
 
     const onMouseUp = () => {
       if (isDragging) {
-        // Snap result
         const final = {
           azimuth: snapToNearest(stateRef.current.azimuth, AZIMUTH_STEPS),
           elevation: snapToNearest(stateRef.current.elevation, ELEVATION_STEPS),
@@ -237,7 +222,6 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 
-    // Render loop
     let animId: number;
     const render = () => {
       animId = requestAnimationFrame(render);
@@ -246,22 +230,22 @@ const Camera3D: React.FC<Camera3DProps> = ({ value, imageUrl, onChange }) => {
     };
     render();
 
-    // Texture update observer
     const textureLoader = new THREE.TextureLoader();
     if (imageUrl) {
-      textureLoader.load(imageUrl, (tex: any) => {
+      textureLoader.load(imageUrl, (tex) => {
         planeMaterial.map = tex;
         planeMaterial.needsUpdate = true;
       });
     }
 
-    // Cleanup
     return () => {
       cancelAnimationFrame(animId);
       canvas.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
-      if (containerRef.current) containerRef.current.removeChild(renderer.domElement);
+      if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
+        containerRef.current.removeChild(renderer.domElement);
+      }
       renderer.dispose();
     };
   }, [imageUrl, onChange]);
